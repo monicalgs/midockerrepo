@@ -1,0 +1,52 @@
+pipeline {
+   
+    agent any
+   
+    environment {
+        registryName = "mgsregistry"
+        registryCredential = 'ACR'
+        dockerImage = ''
+        registryUrl = 'mgsregistry.azurecr.io'
+    }
+    stages {
+       
+        stage ('Checkout') {
+            steps {
+                checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[credentialsId: 'github-desafio', url: 'https://github.com/monicalgs/midockerrepo']])
+                //checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/monicalgs/midockerrepo']])
+       
+            }
+        }
+       
+        stage ('Build Docker image') {
+            steps {
+                script {
+                    dockerImage = docker.build registryName
+                }
+            }
+        }
+        stage('Upload Image to ACR') {
+            steps{   
+                script {
+                    docker.withRegistry( "http://${registryUrl}", registryCredential ) {
+                    dockerImage.push()
+                    }
+                }
+            }
+        }
+        stage('stop previous containers') {
+         steps {
+            sh 'docker ps -f name=mypythonContainer -q | xargs --no-run-if-empty docker container stop'
+            sh 'docker container ls -a -fname=mypythonContainer -q | xargs -r docker container rm'
+            }
+       }
+      
+        stage('Docker Run') {
+            steps{
+                script {
+                    sh 'docker run -d -p 8096:5000 --rm --name mypythonContainer ${registryUrl}/${registryName}'
+                }
+            }
+        }
+    }
+}
